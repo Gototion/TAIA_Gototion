@@ -1,0 +1,117 @@
+% Created 2025-11-21 Fri 18:27
+% Intended LaTeX compiler: pdflatex
+\documentclass[10pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{longtable}
+\usepackage{wrapfig}
+\usepackage{rotating}
+\usepackage[normalem]{ulem}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{capt-of}
+\usepackage{hyperref}
+\usepackage[top=0.1cm, bottom=1cm, left=1cm, right=1cm]{geometry}
+\usepackage{sectsty}
+\allsectionsfont{\centering\bfseries}
+\pagenumbering{gobble}
+\setlength{\parindent}{0pt}
+\author{Manuel Gortarez}
+\date{21 de Noviembre de 2025}
+\title{Gototion}
+\hypersetup{
+ pdfauthor={Manuel Gortarez},
+ pdftitle={Gototion},
+ pdfkeywords={},
+ pdfsubject={},
+ pdfcreator={Emacs 30.2 (Org mode 9.7.11)}, 
+ pdflang={English}}
+\begin{document}
+
+\maketitle
+\section*{Arquitectura de Gototion}
+\label{sec:org3d6ddcd}
+
+\begin{itemize}
+\item Telegram bot (input del usuario y recibir la confirmacion).
+\item AWS lambda (serverless y orquesta el trabajo entre telegram, notion y el agente)
+\item Amazon Bedrock (Para el LLM y el uso del agente)
+\item Notion API
+\end{itemize}
+
+Como el agente solo se encargará de crear instancias en una base de datos ya establecidas
+solo necesitamos la API de notion y no MCP. Para esto aprovecharemos los comandos del bot
+de telegram para la creacion de las tareas.
+\section*{Base de datos en Notion}
+\label{sec:orgd90748d}
+
+Los campos que contendra la base de datos en notion necesarios para la creacion de una tarea
+son los siguientes:
+\begin{itemize}
+\item Nombre de la tarea (Investigar sobre funciones de activación)
+\item Materia (Redes Neuronales)
+\item Fecha de entrega (3 de Agosto de 2025)
+\item Estado (No inicado, iniciado, finalizado)
+\item Nivel de prioridad (baja, media, alta)
+\item Nivel de esfuerzo (bajo, medio, alto)
+\end{itemize}
+
+En notion podemos poner funciones en la base de datos asi como automatizaciones que nos ayudaran
+a quitarle trabajo al agente. Por ejemplo un comando que es bastante util es el de "dias faltantes"
+que se puede calcular muy fácil. Además, podemos acomodar las tareas por medio de uno o mas campos.
+La manera en que se hace es con una matriz:
+
+\begin{center}
+\begin{tabular}{rll}
+Orden & Prioridad & Esfuerzo\\
+\hline
+1 & Alta & Bajo\\
+2 & Alta & Medio\\
+3 & Alta & Alto\\
+4 & Media & Bajo\\
+5 & Media & Medio\\
+6 & Media & Alto\\
+7 & Baja & Bajo\\
+8 & Baja & Medio\\
+9 & Baja & Alto\\
+\end{tabular}
+\end{center}
+
+Ahora con los días faltantes de entrega podemos hacer lo siguiente, crear un campo que el usuario no
+puede interactuar con el, lo llamaremos "urgencia", podemos hacer que tenga tres niveles:
+\begin{itemize}
+\item Urgente.
+\item Proximo.
+\item Sin prisa.
+\end{itemize}
+
+El algoritmo para ordenar las tareas se vuelve sencillo en base a la matriz y a la urgencia:
+\begin{enumerate}
+\item Ordenar tareas por nivel de urgencias.
+\item Por cada nivel de urgencias ordenar en base a la matriz Prioridad x Esfuerzo.
+\end{enumerate}
+
+Con esto ya tenemos todo lo necesario en notion, al menos en la parte de la base de datos.
+\section*{Bot de Telegram}
+\label{sec:org87bb0d0}
+
+Como primera aproximación no usarmemos todavia un LLM, lo que haremos es en base a texto
+formateado y comandos de telegram es que actualizaremos la base de datos en notion. Algunos comandos
+son:
+\begin{itemize}
+\item Credenciales: aquí pondremos las credenciales de los usuarios para poder interactuar son su base de
+datos en notion.
+\item Crear Tarea: para crear una tarea de la escuela.
+\item Modificar Tarea: por si hay algo que modificar en una tarea. Aqui hay que ver como manejamos que el
+usuario escoja que tarea modificar.
+\item Eliminar Tarea
+\item Lista de Tareas: el bot le proporciona al usuario las tareas que tiene pendientes ya ordenadas, de tal
+manera que la primera tarea es la primera que el usuario debería de hacer en base a las métricas.
+\end{itemize}
+
+Por el moment como no usaremos todavia ni AWS ni un LLM una idea de creacion de tarea sería asi:
+\begin{itemize}
+\item \texttt{/CrearTarea} : funciones de activacion, redes neuronales, 03-08-25, Media, Baja.
+\end{itemize}
+\end{document}

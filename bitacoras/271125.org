@@ -1,0 +1,80 @@
+#+TITLE: Gototion
+#+AUTHOR: Manuel Gortarez
+#+DATE: 21 de Noviembre de 2025
+
+#+OPTIONS: toc:nil num:nil
+#+LATEX_CLASS: article
+#+LATEX_CLASS_OPTIONS: [10pt]
+#+LATEX_HEADER: \usepackage[top=0.1cm, bottom=1cm, left=1cm, right=1cm]{geometry}
+#+LATEX_HEADER: \usepackage{sectsty}
+#+LATEX_HEADER: \allsectionsfont{\centering\bfseries}
+#+LATEX_HEADER: \pagenumbering{gobble}
+#+LATEX_HEADER: \setlength{\parindent}{0pt}
+
+* Arquitectura de Gototion
+
+- Telegram bot (input del usuario y recibir la confirmacion).
+- AWS lambda (serverless y orquesta el trabajo entre telegram, notion y el agente)
+- Amazon Bedrock (Para el LLM y el uso del agente)
+- Notion API
+
+Como el agente solo se encargará de crear instancias en una base de datos ya establecidas
+solo necesitamos la API de notion y no MCP. Para esto aprovecharemos los comandos del bot
+de telegram para la creacion de las tareas.
+
+* Base de datos en Notion
+
+Los campos que contendra la base de datos en notion necesarios para la creacion de una tarea
+son los siguientes:
+- Nombre de la tarea (Investigar sobre funciones de activación)
+- Materia (Redes Neuronales)
+- Fecha de entrega (3 de Agosto de 2025)
+- Estado (No inicado, iniciado, finalizado)
+- Nivel de prioridad (baja, media, alta)
+- Nivel de esfuerzo (bajo, medio, alto)
+
+En notion podemos poner funciones en la base de datos asi como automatizaciones que nos ayudaran
+a quitarle trabajo al agente. Por ejemplo un comando que es bastante util es el de "dias faltantes"
+que se puede calcular muy fácil. Además, podemos acomodar las tareas por medio de uno o mas campos.
+La manera en que se hace es con una matriz:
+
+| Orden | Prioridad | Esfuerzo |
+|-------+-----------+----------|
+|     1 | Alta      | Bajo     |
+|     2 | Alta      | Medio    |
+|     3 | Alta      | Alto     |
+|     4 | Media     | Bajo     |
+|     5 | Media     | Medio    |
+|     6 | Media     | Alto     |
+|     7 | Baja      | Bajo     |
+|     8 | Baja      | Medio    |
+|     9 | Baja      | Alto     |
+
+Ahora con los días faltantes de entrega podemos hacer lo siguiente, crear un campo que el usuario no
+puede interactuar con el, lo llamaremos "urgencia", podemos hacer que tenga tres niveles:
+- Urgente.
+- Proximo.
+- Sin prisa.
+
+El algoritmo para ordenar las tareas se vuelve sencillo en base a la matriz y a la urgencia:
+1. Ordenar tareas por nivel de urgencias.
+2. Por cada nivel de urgencias ordenar en base a la matriz Prioridad x Esfuerzo.
+
+Con esto ya tenemos todo lo necesario en notion, al menos en la parte de la base de datos.
+
+* Bot de Telegram
+
+Como primera aproximación no usarmemos todavia un LLM, lo que haremos es en base a texto
+formateado y comandos de telegram es que actualizaremos la base de datos en notion. Algunos comandos
+son:
+- Credenciales: aquí pondremos las credenciales de los usuarios para poder interactuar son su base de
+  datos en notion.
+- Crear Tarea: para crear una tarea de la escuela.
+- Modificar Tarea: por si hay algo que modificar en una tarea. Aqui hay que ver como manejamos que el
+  usuario escoja que tarea modificar.
+- Eliminar Tarea
+- Lista de Tareas: el bot le proporciona al usuario las tareas que tiene pendientes ya ordenadas, de tal
+  manera que la primera tarea es la primera que el usuario debería de hacer en base a las métricas.
+
+Por el moment como no usaremos todavia ni AWS ni un LLM una idea de creacion de tarea sería asi:
+- ~/CrearTarea~ : funciones de activacion, redes neuronales, 03-08-25, Media, Baja.  
