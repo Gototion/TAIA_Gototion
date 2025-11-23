@@ -9,6 +9,7 @@ class NotionClient:
         load_dotenv()
         self.__token = os.getenv("NOTION_TK")
         self.__datasource_id = os.getenv("NOTION_DATA_SOURCE_ID")
+        self.__database_id = os.getenv("NOTION_DB_ID")
         self.notion_version = "2025-09-03"
         self.__headers = {
             "Content-Type": "application/json",
@@ -16,6 +17,10 @@ class NotionClient:
             "Notion-Version": self.notion_version,
         }
         self.base_url = "https://api.notion.com/v1"
+
+    @property
+    def database_id(self) -> str:
+        return self.__database_id
 
     def _request(self, method: str, endpoint: str, **kwargs) -> dict:
         """

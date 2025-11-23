@@ -25,3 +25,16 @@ async def get_tasks_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     await update.message.reply_text(response)
 
+# Comando que inicia la actualización
+async def update_task_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    msg = """
+Para actualizar una tarea, proporciona el número de la tarea y los campos a actualizar en el siguiente formato:
+
+número de tarea, campo1: nuevo valor1, campo2: nuevo valor2
+    """
+    
+    context.user_data['last_command'] = 'update_task'
+    
+    await update.message.reply_text(msg)
+
+

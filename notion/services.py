@@ -39,12 +39,17 @@ def get_task(client: NotionClient, page_id: str) -> dict:
     """
     return client.get_page(page_id)
 
-def update_task(client: NotionClient, page_id: str, updates: dict) -> bool:
+def update_task(client: NotionClient, page_id: str, properties: dict) -> bool:
     """
     Update a Notion task with given updates.
     """
-    response = client.update_page(page_id, updates)
-    return response.status_code == 200
+    try:
+        response = client.update_page(page_id, {"properties": properties})
+        return True
+    except Exception as e:
+        print(f"Error updating task: {e}")
+        return False
+
 
 def archive_task(client: NotionClient, page_id: str) -> bool:
     """

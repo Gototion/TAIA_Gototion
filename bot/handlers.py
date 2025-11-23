@@ -3,7 +3,7 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 from bot.config import BOT_USERNAME
-from notion.services import create_task, get_tasks
+from notion.services import create_task, get_tasks, update_task
 from notion.client import NotionClient
 
 notion_client = NotionClient()
@@ -13,7 +13,7 @@ notion_client = NotionClient()
 # ============================== 
 def _handle_create_task(update : Update, context : ContextTypes.DEFAULT_TYPE) -> str:
     text : str = update.message.text
-    task_columns = ['nombre', 'materia', 'descripcion', 'fecha_entrega', 'prioridad', 'nivel_esfuerzo']
+    task_columns = ['nombre', 'descripcion', 'materia', 'fecha_entrega', 'prioridad', 'nivel_esfuerzo']
     task_details = [detail.strip() for detail in text.split(',')]
 
     if len(task_details) != len(task_columns):
@@ -27,8 +27,56 @@ def _handle_create_task(update : Update, context : ContextTypes.DEFAULT_TYPE) ->
     else:
         return "Error al crear la tarea en Notion. Por favor, intenta de nuevo."
 
-def _handle_update_task(update : Update, context : ContextTypes.DEFAULT_TYPE) -> str:
-    pass  
+def _handle_update_task(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
+    text: str = update.message.text
+
+    try:
+        task_num_str, props_str = text.split(',', 1)
+        task_num = task_num_str.strip()
+        props_list = [p.strip() for p in props_str.split(',')]
+    except ValueError:
+        return "Formato inválido. Usa: número de tarea, campo1: valor1, campo2: valor2"
+
+    tasks = get_tasks(notion_client).get("results", [])
+    if not tasks:
+        return "No tienes tareas pendientes para actualizar."
+
+    # Buscar el page_id de la tarea correspondiente
+    page_id = None
+    for i, task in enumerate(tasks, start=1):
+        if str(i) == task_num:
+            page_id = task.get("id")
+            break
+    if not page_id:
+        return f"No se encontró la tarea número {task_num}"
+
+    # Convertir propiedades a formato Notion
+    properties = {}
+    for prop in props_list:
+        if ':' not in prop:
+            continue
+        key, value = [x.strip() for x in prop.split(':', 1)]
+        if key.lower() == "estado":
+            properties["Estado"] = {"status": {"name": value}}
+        elif key.lower() == "prioridad":
+            properties["Prioridad"] = {"select": {"name": value}}
+        elif key.lower() == "nivel de esfuerzo":
+            properties["Nivel de Esfuerzo"] = {"select": {"name": value}}
+        elif key.lower() == "fecha de entrega":
+            properties["Fecha de Entrega"] = {"date": {"start": value}}
+        elif key.lower() == "nombre":
+            properties["Nombre"] = {"title": [{"text": {"content": value}}]}
+        elif key.lower() == "descripcion":
+            properties["Descripción"] = {"rich_text": [{"text": {"content": value}}]}
+
+    print(f'Actualizando tarea {page_id} con propiedades: {properties}')
+
+    # Actualizar la tarea en Notion
+    if update_task(notion_client, page_id, properties):
+        return "Tarea actualizada exitosamente."
+    else:
+        return "Ocurrió un error al actualizar la tarea."
+
 
 def _handle_delete_tasks(update : Update, context : ContextTypes.DEFAULT_TYPE) -> str:
     pass
@@ -85,8 +133,7 @@ def handle_response(update : Update, context : ContextTypes.DEFAULT_TYPE) -> str
         return _handle_create_task(update, context)
         
     elif last_cmd == 'update_task':
-        # Future implementation for updating tasks
-        return "Funcionalidad de actualización de tareas no implementada aún."
+        return _handle_update_task(update, context)
 
     elif last_cmd == 'delete_tasks':
         # Future implementation for updating tasks
