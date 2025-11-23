@@ -26,5 +26,36 @@ def create_task(
         }
     }
 
-    response = client.post(data)
+    try:
+        client.create_page(data)
+        return True
+    except Exception as e:
+        print(f"Error creating task: {e}")
+        return False
+
+def get_task(client: NotionClient, page_id: str) -> dict:
+    """
+    Retrieve a Notion task by its page ID.
+    """
+    return client.get_page(page_id)
+
+def update_task(client: NotionClient, page_id: str, updates: dict) -> bool:
+    """
+    Update a Notion task with given updates.
+    """
+    response = client.update_page(page_id, updates)
     return response.status_code == 200
+
+def archive_task(client: NotionClient, page_id: str) -> bool:
+    """
+    Archive a Notion task by its page ID.
+    """
+    response = client.archive_page(page_id)
+    return response.status_code == 200
+
+def query_tasks(client: NotionClient, filter: dict = None, sorts: list = None) -> dict:
+    """
+    Query tasks in the Notion database with optional filters and sorts.
+    """
+    return client.query_database(filter, sorts)
+

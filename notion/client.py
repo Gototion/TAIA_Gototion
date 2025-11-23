@@ -1,55 +1,61 @@
 # notion/client.py
-import os
+
 import requests
+import os
 from dotenv import load_dotenv
 
 class NotionClient:
-    """
-    A lightweight client for interacting with the Notion API.
-
-    This class handles:
-    - Loading credentials from environment variables
-    - Managing authentication headers
-    - Sending POST requests to create new pages in a Notion database
-    """
-
     def __init__(self):
-        """
-        Initialize the Notion client by loading environment variables
-        and setting up authentication headers.
-        """
         load_dotenv()
-
-        # Private credentials (should not be accessed outside this class)
         self.__token = os.getenv("NOTION_TK")
         self.__database_id = os.getenv("NOTION_DB_ID")
-
-        # Notion API version
-        self.notion_version = "2022-06-28"
-
-        # HTTP headers required by Notion API
+        self.notion_version = "2025-09-03"
         self.__headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.__token}",
             "Notion-Version": self.notion_version,
         }
+        self.base_url = "https://api.notion.com/v1"
 
-        # Base URL for creating pages in Notion
-        self.url = "https://api.notion.com/v1/pages"
-        
     @property
     def database_id(self) -> str:
-        """Return the Notion database ID."""
         return self.__database_id
 
-    def post(self, data: dict) -> requests.Response:
+    def _request(self, method: str, endpoint: str, **kwargs) -> dict:
         """
-        Send a POST request to the Notion API.
+        Internal method to make calls to the Notion API.
 
         Args:
-            data (dict): Structured JSON payload representing the Notion page.
+            method (str): "GET", "POST", "PATCH", "DELETE"
+            endpoint (str): relative endpoint (e.g., "/pages")
+            kwargs: parameters for the request (json, params, etc.)
 
         Returns:
-            requests.Response: The HTTP response object from Notion.
+            dict: response in JSON format
         """
-        return requests.post(self.url, headers=self.__headers, json=data)
+
+        url = f"{self.base_url}{endpoint}"
+        response = requests.request(method, url, headers=self.__headers, **kwargs)
+        response.raise_for_status()  # Lanza error si status >= 400
+        return response.json()
+
+    def create_page(self, data: dict) -> dict:
+        return self._request("POST", "/pages", json=data)
+
+    def get_page(self, page_id: str) -> dict:
+        return self._request("GET", f"/pages/{page_id}")
+
+    def update_page(self, page_id: str, data: dict) -> dict:
+        return self._request("PATCH", f"/pages/{page_id}", json=data)
+
+    def archive_page(self, page_id: str) -> dict:
+        data = {"archived": True}
+        return self.update_page(page_id, data)
+
+    def query_database(self, filter: dict = None, sorts: list = None) -> dict:
+        payload = {}
+        if filter:
+            payload["filter"] = filter
+        if sorts:
+            payload["sorts"] = sorts
+        return self._request("POST", f"/databases/{self.database_id}/query", json=payload)

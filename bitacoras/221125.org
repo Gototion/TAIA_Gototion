@@ -1,0 +1,10 @@
+* Creacion de Herramientas para el LLM
+
+Se recomienda nombrar las funciones en ingles ya que los LLM estan entrenados con código
+en ingles.
+
+Para crear una herramienta necesitamos lo siguiente:
+- La funcion en python.
+- Un diccionario especificando cada argumento de la funcion, junto con la descripcion de que
+  hace la funcion y que significa cada argumento.
+  
