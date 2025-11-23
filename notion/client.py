@@ -8,7 +8,7 @@ class NotionClient:
     def __init__(self):
         load_dotenv()
         self.__token = os.getenv("NOTION_TK")
-        self.__database_id = os.getenv("NOTION_DB_ID")
+        self.__datasource_id = os.getenv("NOTION_DATA_SOURCE_ID")
         self.notion_version = "2025-09-03"
         self.__headers = {
             "Content-Type": "application/json",
@@ -16,10 +16,6 @@ class NotionClient:
             "Notion-Version": self.notion_version,
         }
         self.base_url = "https://api.notion.com/v1"
-
-    @property
-    def database_id(self) -> str:
-        return self.__database_id
 
     def _request(self, method: str, endpoint: str, **kwargs) -> dict:
         """
@@ -52,10 +48,14 @@ class NotionClient:
         data = {"archived": True}
         return self.update_page(page_id, data)
 
-    def query_database(self, filter: dict = None, sorts: list = None) -> dict:
+    def query_datasource(self, filter: dict = None, sorts: list = None) -> dict:
+        """
+        Query a Notion data source using the new 2025-09-03 API.
+        """
         payload = {}
         if filter:
             payload["filter"] = filter
         if sorts:
             payload["sorts"] = sorts
-        return self._request("POST", f"/databases/{self.database_id}/query", json=payload)
+
+        return self._request("POST", f"/data_sources/{self.__datasource_id}/query", json=payload)

@@ -53,9 +53,18 @@ def archive_task(client: NotionClient, page_id: str) -> bool:
     response = client.archive_page(page_id)
     return response.status_code == 200
 
-def query_tasks(client: NotionClient, filter: dict = None, sorts: list = None) -> dict:
-    """
-    Query tasks in the Notion database with optional filters and sorts.
-    """
-    return client.query_database(filter, sorts)
+def get_tasks(client: NotionClient) -> dict:
+    filter = {
+        "property": "Estado",
+        "status": {"equals": "Not started"}
+    }
+
+    sorts = [
+        {"property": "Prioridad", "direction": "ascending"},
+        {"property": "Nivel de Esfuerzo", "direction": "descending"},
+        {"property": "Fecha de Entrega", "direction": "ascending"}
+    ]
+
+    return client.query_datasource(filter, sorts)
+
 

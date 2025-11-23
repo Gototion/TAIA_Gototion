@@ -3,7 +3,7 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 from bot.config import BOT_USERNAME
-from notion.services import create_task
+from notion.services import create_task, get_tasks
 from notion.client import NotionClient
 
 notion_client = NotionClient()
@@ -33,8 +33,44 @@ def _handle_update_task(update : Update, context : ContextTypes.DEFAULT_TYPE) ->
 def _handle_delete_tasks(update : Update, context : ContextTypes.DEFAULT_TYPE) -> str:
     pass
 
-def _handle_get_tasks(update : Update, context : ContextTypes.DEFAULT_TYPE) -> str:
-    pass
+def handle_get_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
+    tasks_data = get_tasks(notion_client)
+    results = tasks_data.get("results", [])
+    context.user_data['last_command'] = ''
+    
+    if not results:
+        return "No tienes tareas pendientes."
+
+    response_lines = [
+        "Aquí está la lista de tus tareas pendientes ordenadas por prioridad, esfuerzo y fecha de entrega:\n"
+    ]
+
+    for i, task in enumerate(results, start=1):
+        props = task.get("properties", {})
+
+        # Extraer propiedades específicas, con seguridad si no existen
+        nombre = props.get("Nombre", {}).get("title", [])
+        nombre_text = nombre[0]["text"]["content"] if nombre else "Sin título"
+
+        descripcion = props.get("Descripción", {}).get("rich_text", [])
+        descripcion_text = descripcion[0]["text"]["content"] if descripcion else "Sin descripción"
+
+        materia = props.get("Materia", {}).get("select", {}).get("name", "Sin materia")
+        fecha_entrega = props.get("Fecha de Entrega", {}).get("date", {}).get("start", "Sin fecha")
+        prioridad = props.get("Prioridad", {}).get("select", {}).get("name", "Sin prioridad")
+        nivel_esfuerzo = props.get("Nivel de Esfuerzo", {}).get("select", {}).get("name", "Sin nivel")
+
+        # Formatear cada tarea en una línea
+        response_lines.append(
+            f"{i}. {nombre_text} ({materia})\n"
+            f"   Descripción: {descripcion_text}\n"
+            f"   Fecha de entrega: {fecha_entrega}\n"
+            f"   Prioridad: {prioridad}, Nivel de esfuerzo: {nivel_esfuerzo}\n"
+        )
+
+    # Unir todas las líneas en un solo string para Telegram
+    return "\n".join(response_lines)
+
 
 # ==============================
 #         RESPONSES
@@ -43,6 +79,7 @@ def handle_response(update : Update, context : ContextTypes.DEFAULT_TYPE) -> str
     last_cmd : str = context.user_data.get('last_command', '')
     text : str = update.message.text
 
+    print(f'Último comando del usuario: {last_cmd}')
     # --- Create Task ---
     if last_cmd == 'create_task':
         return _handle_create_task(update, context)
@@ -56,8 +93,7 @@ def handle_response(update : Update, context : ContextTypes.DEFAULT_TYPE) -> str
         return "Funcionalidad de actualización de tareas no implementada aún."
 
     elif last_cmd == 'get_tasks':
-        # Future implementation for updating tasks
-        return "Funcionalidad de actualización de tareas no implementada aún."
+        return _handle_get_tasks(update, context)
 
     else:
         return "No entendí tu mensaje. Usa /crear_tarea para iniciar la creación de una tarea."

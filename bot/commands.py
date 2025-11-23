@@ -1,5 +1,7 @@
 # bot/commands.py
 
+from bot.handlers import handle_get_tasks
+
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("¡Bienvenido!")
 
@@ -16,3 +18,10 @@ Investigar IA en AWS, Revisar documentación y tutoriales sobre LLMs, Inteligenc
 
     context.user_data['last_command'] = 'create_task'
     await update.message.reply_text(msg)
+
+async def get_tasks_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+
+    response = handle_get_tasks(update, context)
+
+    await update.message.reply_text(response)
+
