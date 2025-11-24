@@ -1,5 +1,6 @@
+# main.py
 
 if __name__ == "__main__":
-    from bot import bot
-    bot_app = bot.create_bot()
-    bot_app.run_polling()
+    from bot.pooling_bot import pooling_bot
+    app = pooling_bot()
+    app.run_polling()

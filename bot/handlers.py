@@ -2,7 +2,7 @@
 
 from telegram import Update
 from telegram.ext import ContextTypes
-from bot.config import BOT_USERNAME
+from config.config import config
 from notion.services import create_task, get_tasks, update_task
 from notion.client import NotionClient
 
@@ -157,11 +157,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     print(f'Usuario {user_id} en {chat_type}: "{text}"')
 
-    if chat_type == 'group' and BOT_USERNAME not in text:
+    if chat_type == 'group' and config["BOT_USERNAME"] not in text:
         return
 
     if chat_type == 'group':
-        update.message.text = text.replace(BOT_USERNAME, '').strip()
+        update.message.text = text.replace(config["BOT_USERNAME"], '').strip()
 
     response = handle_response(update, context)
     print('Bot:', response)

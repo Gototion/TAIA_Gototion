@@ -2,14 +2,13 @@
 
 import requests
 import os
-from dotenv import load_dotenv
+from config.config import config
 
 class NotionClient:
     def __init__(self):
-        load_dotenv()
-        self.__token = os.getenv("NOTION_TK")
-        self.__datasource_id = os.getenv("NOTION_DATA_SOURCE_ID")
-        self.__database_id = os.getenv("NOTION_DB_ID")
+        self.__token = config["NOTION_TK"]
+        self.__datasource_id = config["NOTION_DATA_SOURCE_ID"]
+        self.__database_id = config["NOTION_DB_ID"]
         self.notion_version = "2025-09-03"
         self.__headers = {
             "Content-Type": "application/json",
