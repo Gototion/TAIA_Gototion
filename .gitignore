@@ -1,3 +1,5 @@
 .env
 .dir-locals.el
 __pycache__
+libs
+deployment.zip
