@@ -7,8 +7,13 @@ from config.config import config
 class NotionClient:
     def __init__(self):
         self.__token = config["NOTION_TK"]
-        self.__datasource_id = config["NOTION_DATA_SOURCE_ID"]
-        self.__database_id = config["NOTION_DB_ID"]
+        # Clean up database ID: remove any URL parameters like ?v=...
+        db_id = config["NOTION_DB_ID"]
+        if db_id and "?" in db_id:
+            db_id = db_id.split("?")[0]
+        self.__database_id = db_id
+        
+        # Use Notion API version 2025-09-03 (supports multi-source databases)
         self.notion_version = "2025-09-03"
         self.__headers = {
             "Content-Type": "application/json",
@@ -16,6 +21,36 @@ class NotionClient:
             "Notion-Version": self.notion_version,
         }
         self.base_url = "https://api.notion.com/v1"
+        
+        # Try to get data_source_id from config; if not set, discover it from database
+        configured_ds_id = config["NOTION_DATA_SOURCE_ID"]
+        self.__datasource_id = configured_ds_id if configured_ds_id else self._discover_data_source_id()
+    
+    def _discover_data_source_id(self) -> str:
+        """
+        Discover the data_source_id by calling GET /v1/databases/{database_id}.
+        This endpoint returns a list of data sources under the database.
+        """
+        if not self.__database_id:
+            raise RuntimeError("NOTION_DB_ID not configured. Cannot discover data source.")
+        
+        try:
+            url = f"{self.base_url}/databases/{self.__database_id}"
+            response = requests.get(url, headers=self.__headers)
+            response.raise_for_status()
+            data = response.json()
+            
+            # Extract the first data source from the list
+            data_sources = data.get("data_sources", [])
+            if not data_sources:
+                raise RuntimeError(f"No data sources found in database {self.__database_id}")
+            
+            ds_id = data_sources[0].get("id")
+            print(f"✓ Discovered data_source_id: {ds_id}")
+            return ds_id
+        except Exception as e:
+            print(f"✗ Error discovering data_source_id: {e}")
+            raise RuntimeError(f"Failed to discover data_source_id: {e}")
 
     @property
     def database_id(self) -> str:
@@ -36,7 +71,24 @@ class NotionClient:
 
         url = f"{self.base_url}{endpoint}"
         response = requests.request(method, url, headers=self.__headers, **kwargs)
-        response.raise_for_status()  # Lanza error si status >= 400
+
+        # If Notion returns an error (status >= 400), capture and raise a clearer exception
+        if not response.ok:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+
+            # Print debug information to help diagnose issues (token/ids/payload)
+            print(f"Notion API error: {response.status_code} {response.reason} for URL: {url}")
+            print(f"Request headers: {self.__headers}")
+            if 'json' in kwargs:
+                print(f"Request JSON payload: {kwargs.get('json')}")
+            print(f"Response body: {body}")
+
+            raise RuntimeError(f"Notion API error {response.status_code}: {body}")
+
+        # Successful response
         return response.json()
 
     def create_page(self, data: dict) -> dict:
@@ -62,4 +114,17 @@ class NotionClient:
         if sorts:
             payload["sorts"] = sorts
 
-        return self._request("POST", f"/data_sources/{self.__datasource_id}/query", json=payload)
+        # If a data source id is configured, use the newer data_sources endpoint.
+        if self.__datasource_id:
+            endpoint = f"/data_sources/{self.__datasource_id}/query"
+            print(f"Querying Notion data source {self.__datasource_id} with payload: {payload}")
+            return self._request("POST", endpoint, json=payload)
+
+        # Fallback: if no data source id is available, try querying the database directly
+        if self.__database_id:
+            endpoint = f"/databases/{self.__database_id}/query"
+            print(f"Querying Notion database {self.__database_id} with payload: {payload}")
+            return self._request("POST", endpoint, json=payload)
+
+        # If neither is available, raise a clearer error
+        raise RuntimeError("Notion data source id and database id are not configured. Set NOTION_DATA_SOURCE_ID or NOTION_DB_ID in your environment.")

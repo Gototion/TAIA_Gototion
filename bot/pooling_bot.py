@@ -7,7 +7,8 @@ from bot.commands import (
     start_command,
     create_task_command,
     get_tasks_command,
-    update_task_command
+    update_task_command,
+    delete_task_command
 )
 from bot.handlers import handle_message, error_handler
 
@@ -26,6 +27,7 @@ def pooling_bot():
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("crear_tarea", create_task_command))
     app.add_handler(CommandHandler("lista_tareas", get_tasks_command))
+    app.add_handler(CommandHandler("borrar_tarea", delete_task_command))
     app.add_handler(CommandHandler("actualizar_tarea", update_task_command))
 
     # Messages that are not commands

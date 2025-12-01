@@ -116,7 +116,54 @@ def _handle_update_task(update: Update, context: ContextTypes.DEFAULT_TYPE) -> s
 
 
 def _handle_delete_tasks(update : Update, context : ContextTypes.DEFAULT_TYPE) -> str:
-    pass
+    text = update.message.text.strip()
+
+    # Mapas almacenados por el comando
+    num_map = context.user_data.get('delete_map_by_num', {})
+    name_map = context.user_data.get('delete_map_by_name', {})
+
+    page_id = None
+
+    # 1) Si responde con número
+    if text in num_map:
+        page_id = num_map[text]
+
+    # 2) Si responde con nombre exacto
+    elif text in name_map:
+        page_id = name_map[text]
+
+    else:
+        # Intentar emparejar por número si el usuario envío dígitos
+        if text.isdigit() and text in num_map:
+            page_id = num_map[text]
+        else:
+            # Intentar búsqueda por substring en los nombres
+            for name, pid in name_map.items():
+                if text.lower() in name.lower():
+                    page_id = pid
+                    break
+
+    if not page_id:
+        return "No encontré la tarea solicitada. Responde con el número o el nombre exacto tal como aparece en la lista."
+
+    # Intentar archivar/eliminar la tarea en Notion
+    from notion.services import archive_task
+
+    try:
+        ok = archive_task(notion_client, page_id)
+    except Exception as e:
+        print(f'Error borrando tarea en Notion: {e}')
+        ok = False
+
+    # Limpiar el estado
+    context.user_data['last_command'] = ''
+    context.user_data.pop('delete_map_by_num', None)
+    context.user_data.pop('delete_map_by_name', None)
+
+    if ok:
+        return "Tarea eliminada correctamente."
+    else:
+        return "Ocurrió un error al intentar eliminar la tarea. Por favor, intenta de nuevo más tarde."
 
 def handle_get_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
     tasks_data = get_tasks(notion_client)
@@ -173,8 +220,7 @@ def handle_response(update : Update, context : ContextTypes.DEFAULT_TYPE) -> str
         return _handle_update_task(update, context)
 
     elif last_cmd == 'delete_tasks':
-        # Future implementation for updating tasks
-        return "Funcionalidad de actualización de tareas no implementada aún."
+        return _handle_delete_tasks(update, context)
 
     elif last_cmd == 'get_tasks':
         return _handle_get_tasks(update, context)

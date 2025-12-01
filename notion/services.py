@@ -62,8 +62,24 @@ def archive_task(client: NotionClient, page_id: str) -> bool:
     """
     Archive a Notion task by its page ID.
     """
-    response = client.archive_page(page_id)
-    return response.status_code == 200
+    try:
+        response = client.archive_page(page_id)
+
+        # The client._request() returns parsed JSON (dict). The update/patch
+        # to archive a page should return the page object which includes
+        # the `archived` boolean field. If so, respect it.
+        if isinstance(response, dict):
+            return bool(response.get("archived", False))
+
+        # If the client returned a requests.Response-like object, check status_code
+        if hasattr(response, "status_code"):
+            return response.status_code == 200
+
+        # Otherwise, consider it failed
+        return False
+    except Exception as e:
+        print(f"Error archiving task: {e}")
+        return False
 
 def get_tasks(client: NotionClient) -> dict:
     filter = {
