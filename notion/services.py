@@ -13,6 +13,13 @@ def create_task(
     """
     Creare a notion task given a Notion Client and task details.
     """
+    # Sanitizar campos vacíos: usar valores por defecto para select fields
+    materia = materia.strip() if materia else "Sin categoría"
+    prioridad = prioridad.strip() if prioridad else "Media"
+    nivel_esfuerzo = nivel_esfuerzo.strip() if nivel_esfuerzo else "Medio"
+    descripcion = descripcion.strip() if descripcion else ""
+    nombre = nombre.strip() if nombre else "Tarea sin título"
+    
     data = {
         "parent": {"database_id": client.database_id},
         "properties": {
