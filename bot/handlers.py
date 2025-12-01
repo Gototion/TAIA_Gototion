@@ -2,6 +2,7 @@
 
 from telegram import Update
 from telegram.ext import ContextTypes
+from bot.llm_parser import parse_tasks_natural
 from config.config import config
 from notion.services import create_task, get_tasks, update_task
 from notion.client import NotionClient
@@ -15,17 +16,53 @@ def _handle_create_task(update : Update, context : ContextTypes.DEFAULT_TYPE) ->
     text : str = update.message.text
     task_columns = ['nombre', 'descripcion', 'materia', 'fecha_entrega', 'prioridad', 'nivel_esfuerzo']
     task_details = [detail.strip() for detail in text.split(',')]
+    # Si el usuario dio exactamente 6 campos separados por comas, usar el parser simple
+    if len(task_details) == len(task_columns):
+        task = {column: detail for column, detail in zip(task_columns, task_details)}
 
-    if len(task_details) != len(task_columns):
-        return "Error: Por favor, proporciona todos los detalles de la tarea en el formato correcto."
+        if create_task(notion_client, **task):
+            context.user_data['last_command'] = ''
+            return "Tarea creada exitosamente en Notion."
+        else:
+            return "Error al crear la tarea en Notion. Por favor, intenta de nuevo."
 
-    task = {column : detail for column, detail in zip(task_columns, task_details)}
+    # Si no coincide con el formato exacto, intentar parsear lenguaje natural con LLM
+    try:
+        user_categories = None
+        # Si tienes categorías de usuario disponibles, pásalas aquí
+        parsed_tasks = parse_tasks_natural(text, user_categories=user_categories, debug=False)
+    except Exception as e:
+        # En caso de fallo del LLM, devolver error de formato
+        print(f'LLM parser error: {e}')
+        return "Error: no pude entender la tarea. Usa el formato: nombre, descripción, materia, fecha (YYYY-MM-DD), prioridad, esfuerzo"
 
-    if create_task(notion_client, **task):
-        context.user_data['last_command'] = ''
-        return "Tarea creada exitosamente en Notion."
-    else:
-        return "Error al crear la tarea en Notion. Por favor, intenta de nuevo."
+    if not parsed_tasks:
+        return "No pude extraer tareas del texto. Intenta ser más concreto o usa el formato por comas."
+
+    created = 0
+    failed = 0
+    for t in parsed_tasks:
+        # Normalizar keys para create_task (espera nombres en español exactos)
+        normalized = {
+            'nombre': t.get('Titulo') or t.get('titulo') or t.get('Titulo', ''),
+            'descripcion': t.get('descripcion', ''),
+            'materia': t.get('materia', ''),
+            'fecha_entrega': t.get('fecha_entrega', ''),
+            'prioridad': t.get('prioridad', ''),
+            'nivel_esfuerzo': t.get('nivel_esfuerzo', ''),
+        }
+        try:
+            ok = create_task(notion_client, **normalized)
+            if ok:
+                created += 1
+            else:
+                failed += 1
+        except Exception as e:
+            print(f'Error creando tarea en Notion: {e}')
+            failed += 1
+
+    context.user_data['last_command'] = ''
+    return f"Tareas creadas: {created}. Fallidas: {failed}."
 
 def _handle_update_task(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
     text: str = update.message.text
