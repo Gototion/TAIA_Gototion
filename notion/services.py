@@ -34,8 +34,9 @@ def create_task(
     }
 
     try:
-        client.create_page(data)
-        return True
+        response = client.create_page(data)
+        # Return the full response for richer reporting (caller can inspect 'id')
+        return response
     except Exception as e:
         print(f"Error creating task: {e}")
         return False
@@ -52,7 +53,8 @@ def update_task(client: NotionClient, page_id: str, properties: dict) -> bool:
     """
     try:
         response = client.update_page(page_id, {"properties": properties})
-        return True
+        # Return response dict for reporting
+        return response
     except Exception as e:
         print(f"Error updating task: {e}")
         return False
@@ -64,19 +66,8 @@ def archive_task(client: NotionClient, page_id: str) -> bool:
     """
     try:
         response = client.archive_page(page_id)
-
-        # The client._request() returns parsed JSON (dict). The update/patch
-        # to archive a page should return the page object which includes
-        # the `archived` boolean field. If so, respect it.
-        if isinstance(response, dict):
-            return bool(response.get("archived", False))
-
-        # If the client returned a requests.Response-like object, check status_code
-        if hasattr(response, "status_code"):
-            return response.status_code == 200
-
-        # Otherwise, consider it failed
-        return False
+        # Return the response dict for reporting purposes
+        return response
     except Exception as e:
         print(f"Error archiving task: {e}")
         return False

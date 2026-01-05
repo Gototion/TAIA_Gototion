@@ -103,7 +103,7 @@ Devuelve SOLO JSON válido."""
 
     try:
         print("[GEMINI PARSER] 📤 Enviando prompt a Gemini API...")
-        model = genai.GenerativeModel("gemini-2.0-flash-lite")
+        model = genai.GenerativeModel("gemini-2.5-flash-lite")
         response = model.generate_content(system_prompt)
         raw_response = response.text.strip()
         print("[GEMINI PARSER] 📥 Respuesta recibida de Gemini")

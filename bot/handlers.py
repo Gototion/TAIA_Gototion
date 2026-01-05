@@ -1,5 +1,6 @@
 # bot/handlers.py
 
+import re
 from telegram import Update
 from telegram.ext import ContextTypes
 from bot.llm_parser import parse_tasks_natural
@@ -8,6 +9,8 @@ from notion.services import create_task, get_tasks, update_task
 from notion.client import NotionClient
 
 notion_client = NotionClient()
+
+
 
 # ==============================
 #         AUXILIARY
@@ -26,13 +29,47 @@ def _handle_create_task(update : Update, context : ContextTypes.DEFAULT_TYPE) ->
         else:
             return "Error al crear la tarea en Notion. Por favor, intenta de nuevo."
 
-    # Si no coincide con el formato exacto, intentar parsear lenguaje natural con LLM
+    # Si no coincide con el formato exacto, intentar usar el agente (Gemini -> plan -> ejecutar herramientas)
     try:
         user_categories = None
-        # Si tienes categorías de usuario disponibles, pásalas aquí
-        parsed_tasks = parse_tasks_natural(text, user_categories=user_categories, debug=False)
+        # Intentar ejecutar el agente primero; si no está disponible, caer en el parser LLM
+        from bot.agent import run_agent_execute
+        try:
+            report = run_agent_execute(text, debug=False, client=notion_client)
+            # Construir reporte detallado para el usuario con cada acción ejecutada
+            lines = []
+            for r in report.get("results", []):
+                act = r.get("action")
+                ok = r.get("ok")
+                if ok:
+                    # Si Notion devolvió un objeto, intentar extraer id y/o title
+                    res = r.get("result")
+                    if isinstance(res, dict):
+                        page_id = res.get("id") or res.get("page", {}).get("id") if isinstance(res.get("page"), dict) else None
+                        if page_id:
+                            lines.append(f"Acción: {act} — OK — page_id: {page_id}")
+                        else:
+                            # Incluir un pequeño resumen si no hay id
+                            short = res.get("object") or str(res)[:120]
+                            lines.append(f"Acción: {act} — OK — respuesta: {short}")
+                    else:
+                        lines.append(f"Acción: {act} — OK")
+                else:
+                    err = r.get("error") or r.get("reason") or str(r.get("result"))
+                    lines.append(f"Acción: {act} — FALLÓ — {err}")
+
+            if lines:
+                context.user_data['last_command'] = ''
+                return "\n".join(lines)
+
+            # Si el agente no realizó ninguna acción, intentar el parser tradicional
+            parsed_tasks = parse_tasks_natural(text, user_categories=user_categories, debug=False)
+        except Exception as e:
+            # Si el agente falla (p. ej. falta GEMINI_API_KEY), usar el parser LLM como fallback
+            print(f'Agent error: {e}')
+            parsed_tasks = parse_tasks_natural(text, user_categories=user_categories, debug=False)
     except Exception as e:
-        # En caso de fallo del LLM, devolver error de formato
+        # En caso de fallo del LLM o de import, devolver error de formato
         print(f'LLM parser error: {e}')
         return "Error: no pude entender la tarea. Usa el formato: nombre, descripción, materia, fecha (YYYY-MM-DD), prioridad, esfuerzo"
 
@@ -223,10 +260,39 @@ def handle_response(update : Update, context : ContextTypes.DEFAULT_TYPE) -> str
         return _handle_delete_tasks(update, context)
 
     elif last_cmd == 'get_tasks':
-        return _handle_get_tasks(update, context)
+        return handle_get_tasks(update, context)
 
     else:
-        return "No entendí tu mensaje. Usa /crear_tarea para iniciar la creación de una tarea."
+        # Sin comando explícito: delegar al agente (LLM) para que elija la herramienta.
+        try:
+            from bot.agent import run_agent_execute
+            report = run_agent_execute(text, debug=False, client=notion_client)
+            lines = []
+            for r in report.get("results", []):
+                act = r.get("action")
+                ok = r.get("ok")
+                if ok:
+                    res = r.get("result")
+                    if isinstance(res, dict):
+                        page_id = res.get("id") or (res.get("page") or {}).get("id") if isinstance(res.get("page"), dict) else None
+                        if page_id:
+                            lines.append(f"Acción: {act} — OK — page_id: {page_id}")
+                        else:
+                            lines.append(f"Acción: {act} — OK — respuesta: {str(res)[:120]}")
+                    else:
+                        lines.append(f"Acción: {act} — OK")
+                else:
+                    err = r.get("error") or r.get("reason") or str(r.get("result"))
+                    lines.append(f"Acción: {act} — FALLÓ — {err}")
+
+            if lines:
+                context.user_data['last_command'] = ''
+                return "\n".join(lines)
+            else:
+                return "No se detectó ninguna acción por parte del agente. Intenta ser más explícito."
+        except Exception as e:
+            print(f'Agent runtime error: {e}')
+            return "No pude procesar tu mensaje automáticamente. Usa /crear_tarea o proporciona más detalles."
         
 
 # ==============================
