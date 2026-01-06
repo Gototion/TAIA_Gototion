@@ -4,11 +4,17 @@ import re
 from telegram import Update
 from telegram.ext import ContextTypes
 from bot.llm_parser import parse_tasks_natural
-from config.config import config
+from config.config import config, check_notion_credentials, test_notion_connection
 from notion.services import create_task, get_tasks, update_task
 from notion.client import NotionClient
 
-notion_client = NotionClient()
+def get_notion_client():
+    """Obtiene el cliente de Notion, verificando credenciales primero."""
+    if not check_notion_credentials():
+        raise RuntimeError("Credenciales de Notion no configuradas. Usa /tutorial y /set_database.")
+    if not test_notion_connection():
+        raise RuntimeError("Fallo en la conexión con Notion. Verifica las credenciales.")
+    return NotionClient()
 
 
 
@@ -16,6 +22,11 @@ notion_client = NotionClient()
 #         AUXILIARY
 # ============================== 
 def _handle_create_task(update : Update, context : ContextTypes.DEFAULT_TYPE) -> str:
+    try:
+        notion_client = get_notion_client()
+    except RuntimeError as e:
+        return str(e)
+    
     text : str = update.message.text
     task_columns = ['nombre', 'descripcion', 'materia', 'fecha_entrega', 'prioridad', 'nivel_esfuerzo']
     task_details = [detail.strip() for detail in text.split(',')]
@@ -78,6 +89,7 @@ def _handle_create_task(update : Update, context : ContextTypes.DEFAULT_TYPE) ->
 
     created = 0
     failed = 0
+    task_details = []
     for t in parsed_tasks:
         # Normalizar keys para create_task (espera nombres en español exactos)
         normalized = {
@@ -89,9 +101,10 @@ def _handle_create_task(update : Update, context : ContextTypes.DEFAULT_TYPE) ->
             'nivel_esfuerzo': t.get('nivel_esfuerzo', ''),
         }
         try:
-            ok = create_task(notion_client, **normalized)
-            if ok:
+            response = create_task(notion_client, **normalized)
+            if response:
                 created += 1
+                task_details.append(format_task_details(response))
             else:
                 failed += 1
         except Exception as e:
@@ -99,9 +112,19 @@ def _handle_create_task(update : Update, context : ContextTypes.DEFAULT_TYPE) ->
             failed += 1
 
     context.user_data['last_command'] = ''
-    return f"Tareas creadas: {created}. Fallidas: {failed}."
+    if created == 1:
+        return task_details[0]
+    elif created > 1:
+        return f"Tareas creadas: {created}. Fallidas: {failed}.\n" + "\n".join(task_details)
+    else:
+        return f"Tareas creadas: {created}. Fallidas: {failed}."
 
 def _handle_update_task(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
+    try:
+        notion_client = get_notion_client()
+    except RuntimeError as e:
+        return str(e)
+    
     text: str = update.message.text
 
     try:
@@ -152,7 +175,33 @@ def _handle_update_task(update: Update, context: ContextTypes.DEFAULT_TYPE) -> s
         return "Ocurrió un error al actualizar la tarea."
 
 
-def _handle_delete_tasks(update : Update, context : ContextTypes.DEFAULT_TYPE) -> str:
+def format_task_details(page_dict):
+    """Formatea los detalles de una tarea creada en Notion."""
+    props = page_dict.get("properties", {})
+    
+    nombre = props.get("Nombre", {}).get("title", [{}])[0].get("plain_text", "Sin nombre")
+    descripcion = props.get("Descripción", {}).get("rich_text", [])
+    desc_text = "".join([t.get("plain_text", "") for t in descripcion]) if descripcion else "Sin descripción"
+    materia = props.get("Materia", {}).get("select", {}).get("name", "Sin materia") if props.get("Materia", {}).get("select") else "Sin materia"
+    fecha = props.get("Fecha de entrega", {}).get("date", {}).get("start", "Sin fecha") if props.get("Fecha de entrega", {}).get("date") else "Sin fecha"
+    prioridad = props.get("Prioridad", {}).get("select", {}).get("name", "Sin prioridad") if props.get("Prioridad", {}).get("select") else "Sin prioridad"
+    esfuerzo = props.get("Nivel de Esfuerzo", {}).get("select", {}).get("name", "Sin esfuerzo") if props.get("Nivel de Esfuerzo", {}).get("select") else "Sin esfuerzo"
+    estado = props.get("Estado", {}).get("status", {}).get("name", "Sin estado") if props.get("Estado", {}).get("status") else "Sin estado"
+    
+    return f"""Tarea creada:
+- Nombre: {nombre}
+- Descripción: {desc_text}
+- Materia: {materia}
+- Fecha de entrega: {fecha}
+- Prioridad: {prioridad}
+- Nivel de Esfuerzo: {esfuerzo}
+- Estado: {estado}
+"""
+    try:
+        notion_client = get_notion_client()
+    except RuntimeError as e:
+        return str(e)
+    
     text = update.message.text.strip()
 
     # Mapas almacenados por el comando
@@ -202,7 +251,71 @@ def _handle_delete_tasks(update : Update, context : ContextTypes.DEFAULT_TYPE) -
     else:
         return "Ocurrió un error al intentar eliminar la tarea. Por favor, intenta de nuevo más tarde."
 
+def _handle_set_database(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
+    text = update.message.text.strip()
+    creds = {}
+    # Parsear todas las key: value en el texto, ignorando saltos de línea
+    import re
+    matches = re.findall(r'(\w+):\s*(.+)', text)
+    for match in matches:
+        key, value = match
+        key = key.strip().upper()
+        value = value.strip()
+        if key in ['NOTION_TK', 'NOTION_PAGE_ID', 'NOTION_DB_ID']:
+            creds[key] = value
+    
+    # Verificar que todas estén presentes
+    if len(creds) != 3:
+        return "Error: Debes proporcionar NOTION_TK, NOTION_PAGE_ID y NOTION_DB_ID. Formato: KEY: value (separados por líneas o espacios)."
+    
+    # Actualizar os.environ
+    import os
+    for key, value in creds.items():
+        os.environ[key] = value
+    
+    # Escribir en .env para persistencia
+    env_file = os.path.join(os.path.dirname(__file__), '..', '.env')
+    try:
+        with open(env_file, 'r') as f:
+            env_lines = f.readlines()
+    except FileNotFoundError:
+        env_lines = []
+    
+    # Actualizar o agregar líneas
+    updated_keys = set()
+    for i, line in enumerate(env_lines):
+        if '=' in line:
+            env_key = line.split('=')[0].strip()
+            if env_key in creds:
+                env_lines[i] = f"{env_key}={creds[env_key]}\n"
+                updated_keys.add(env_key)
+    
+    # Agregar las que no estaban
+    for key, value in creds.items():
+        if key not in updated_keys:
+            env_lines.append(f"{key}={value}\n")
+    
+    with open(env_file, 'w') as f:
+        f.writelines(env_lines)
+    
+    # Recargar config
+    from config.config import load_env
+    global config
+    config = load_env()
+    
+    # Verificar conexión
+    if test_notion_connection():
+        context.user_data['last_command'] = ''
+        return "Credenciales configuradas exitosamente. El bot ahora puede usar Notion."
+    else:
+        return "Error en verificación: Credenciales inválidas. Verifica los valores."
+
 def handle_get_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
+    try:
+        notion_client = get_notion_client()
+    except RuntimeError as e:
+        return str(e)
+    
     tasks_data = get_tasks(notion_client)
     results = tasks_data.get("results", [])
     context.user_data['last_command'] = ''
@@ -262,9 +375,13 @@ def handle_response(update : Update, context : ContextTypes.DEFAULT_TYPE) -> str
     elif last_cmd == 'get_tasks':
         return handle_get_tasks(update, context)
 
+    elif last_cmd == 'set_database':
+        return _handle_set_database(update, context)
+
     else:
         # Sin comando explícito: delegar al agente (LLM) para que elija la herramienta.
         try:
+            notion_client = get_notion_client()
             from bot.agent import run_agent_execute
             report = run_agent_execute(text, debug=False, client=notion_client)
             lines = []
@@ -273,7 +390,9 @@ def handle_response(update : Update, context : ContextTypes.DEFAULT_TYPE) -> str
                 ok = r.get("ok")
                 if ok:
                     res = r.get("result")
-                    if isinstance(res, dict):
+                    if act == "create_task" and isinstance(res, dict):
+                        lines.append(format_task_details(res))
+                    elif isinstance(res, dict):
                         page_id = res.get("id") or (res.get("page") or {}).get("id") if isinstance(res.get("page"), dict) else None
                         if page_id:
                             lines.append(f"Acción: {act} — OK — page_id: {page_id}")

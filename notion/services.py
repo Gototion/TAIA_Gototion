@@ -9,33 +9,62 @@ def create_task(
     fecha_entrega: str,
     prioridad: str,
     nivel_esfuerzo: str
-) -> bool:
+) -> dict:
     """
-    Creare a notion task given a Notion Client and task details.
+    Create a task in the Notion database, only using existing properties and validating options.
     """
-    # Sanitizar campos vacíos: usar valores por defecto para select fields
-    materia = materia.strip() if materia else "Sin categoría"
+    # Sanitize inputs
+    nombre = nombre.strip() if nombre else "Tarea sin título"
+    descripcion = descripcion.strip() if descripcion else ""
+    materia = materia.strip() if materia else ""
+    fecha_entrega = fecha_entrega.strip() if fecha_entrega else ""
     prioridad = prioridad.strip() if prioridad else "Media"
     nivel_esfuerzo = nivel_esfuerzo.strip() if nivel_esfuerzo else "Medio"
-    descripcion = descripcion.strip() if descripcion else ""
-    nombre = nombre.strip() if nombre else "Tarea sin título"
+    
+    # Get schema
+    schema = client.get_database_schema()
+    
+    properties = {}
+    
+    # Map and validate properties
+    if "Nombre" in schema and nombre:
+        properties["Nombre"] = {"title": [{"text": {"content": nombre}}]}
+    
+    if "Descripción" in schema and descripcion:
+        properties["Descripción"] = {"rich_text": [{"text": {"content": descripcion}}]}
+    
+    if "Materia" in schema and materia:
+        options = schema["Materia"].get("options", [])
+        # Find case-insensitive match
+        matching_option = next((opt for opt in options if opt.lower() == materia.lower()), None)
+        if matching_option:
+            properties["Materia"] = {"select": {"name": matching_option}}
+        elif not options:  # If no options, allow free text
+            properties["Materia"] = {"select": {"name": materia}}
+    
+    if "Fecha de entrega" in schema and fecha_entrega:
+        properties["Fecha de entrega"] = {"date": {"start": fecha_entrega}}
+    
+    if "Prioridad" in schema and prioridad:
+        options = schema["Prioridad"].get("options", [])
+        if prioridad in options or not options:
+            properties["Prioridad"] = {"select": {"name": prioridad}}
+    
+    if "Nivel de Esfuerzo" in schema and nivel_esfuerzo:
+        options = schema["Nivel de Esfuerzo"].get("options", [])
+        if nivel_esfuerzo in options or not options:
+            properties["Nivel de Esfuerzo"] = {"select": {"name": nivel_esfuerzo}}
+    
+    if "Estado" in schema:
+        properties["Estado"] = {"status": {"name": "Sin empezar"}}
     
     data = {
-        "parent": {"database_id": client.database_id},
-        "properties": {
-            "Nombre": {"title": [{"text": {"content": nombre}}]},
-            "Materia": {"select": {"name": materia}},
-            "Descripción": {"rich_text": [{"text": {"content": descripcion}}]},
-            "Estado": {"status": {"name": "Not started"}},
-            "Fecha de Entrega": {"date": {"start": fecha_entrega}},
-            "Prioridad": {"select": {"name": prioridad}},
-            "Nivel de Esfuerzo": {"select": {"name": nivel_esfuerzo}}
-        }
+        "parent": {"data_source_id": client._NotionClient__datasource_id},
+        "properties": properties
     }
 
     try:
         response = client.create_page(data)
-        # Return the full response for richer reporting (caller can inspect 'id')
         return response
     except Exception as e:
         print(f"Error creating task: {e}")
@@ -75,13 +104,13 @@ def archive_task(client: NotionClient, page_id: str) -> bool:
 def get_tasks(client: NotionClient) -> dict:
     filter = {
         "property": "Estado",
-        "status": {"equals": "Not started"}
+        "status": {"equals": "Sin empezar"}
     }
 
     sorts = [
         {"property": "Prioridad", "direction": "ascending"},
         {"property": "Nivel de Esfuerzo", "direction": "descending"},
-        {"property": "Fecha de Entrega", "direction": "ascending"}
+        {"property": "Fecha de entrega", "direction": "ascending"}
     ]
 
     return client.query_datasource(filter, sorts)

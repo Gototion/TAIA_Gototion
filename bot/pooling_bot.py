@@ -8,7 +8,10 @@ from bot.commands import (
     create_task_command,
     get_tasks_command,
     update_task_command,
-    delete_task_command
+    delete_task_command,
+    tutorial_command,
+    set_database_command,
+    schema_command
 )
 from bot.handlers import handle_message, error_handler
 
@@ -29,6 +32,9 @@ def pooling_bot():
     app.add_handler(CommandHandler("lista_tareas", get_tasks_command))
     app.add_handler(CommandHandler("borrar_tarea", delete_task_command))
     app.add_handler(CommandHandler("actualizar_tarea", update_task_command))
+    app.add_handler(CommandHandler("tutorial", tutorial_command))
+    app.add_handler(CommandHandler("set_database", set_database_command))
+    app.add_handler(CommandHandler("schema", schema_command))
 
     # Messages that are not commands
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))

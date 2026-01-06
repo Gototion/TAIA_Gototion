@@ -29,4 +29,24 @@ def load_env():
         "NOTION_DATA_SOURCE_ID": notion_data_source,
     }
 
+def check_notion_credentials():
+    """Verifica si las credenciales de Notion están configuradas."""
+    return all([
+        config.get("NOTION_TK"),
+        config.get("NOTION_PAGE_ID"),
+        config.get("NOTION_DB_ID")
+    ])
+
+def test_notion_connection():
+    """Realiza una request de prueba a Notion para verificar la conexión."""
+    try:
+        from notion.client import NotionClient
+        client = NotionClient()
+        # Intentar una consulta simple a la DB
+        client.query_datasource()
+        return True
+    except Exception as e:
+        print(f"Error en verificación de Notion: {e}")
+        return False
+
 config = load_env()

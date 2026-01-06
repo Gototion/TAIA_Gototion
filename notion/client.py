@@ -6,9 +6,9 @@ from config.config import config
 
 class NotionClient:
     def __init__(self):
-        self.__token = config["NOTION_TK"]
+        self.__token = os.environ.get("NOTION_TK")
         # Clean up database ID: remove any URL parameters like ?v=...
-        db_id = config["NOTION_DB_ID"]
+        db_id = os.environ.get("NOTION_DB_ID")
         if db_id and "?" in db_id:
             db_id = db_id.split("?")[0]
         self.__database_id = db_id
@@ -23,9 +23,11 @@ class NotionClient:
         self.base_url = "https://api.notion.com/v1"
         
         # Try to get data_source_id from config; if not set, discover it from database
-        configured_ds_id = config["NOTION_DATA_SOURCE_ID"]
+        configured_ds_id = os.environ.get("NOTION_DATA_SOURCE_ID")
         self.__datasource_id = configured_ds_id if configured_ds_id else self._discover_data_source_id()
-    
+
+
+
     def _discover_data_source_id(self) -> str:
         """
         Discover the data_source_id by calling GET /v1/databases/{database_id}.
@@ -90,6 +92,32 @@ class NotionClient:
 
         # Successful response
         return response.json()
+
+    def get_database(self, database_id: str = None) -> dict:
+        if database_id is None:
+            database_id = self.__database_id
+        return self._request("GET", f"/databases/{database_id}")
+
+    def get_database_properties(self, database_id: str = None) -> dict:
+        db = self.get_database(database_id)
+        return db.get("properties", {})
+
+    def get_database_schema(self, database_id: str = None) -> dict:
+        """Obtiene el esquema del data source, incluyendo propiedades y opciones de selects."""
+        ds_id = self.__datasource_id  # Usa el data_source_id descubierto
+        response = self._request('GET', f'/data_sources/{ds_id}')
+        properties = response.get('properties', {})
+        schema = {}
+        for prop_name, prop_data in properties.items():
+            prop_type = prop_data.get('type')
+            schema[prop_name] = {
+                'type': prop_type,
+                'options': []
+            }
+            if prop_type in ['select', 'multi_select', 'status']:
+                options = prop_data.get(prop_type, {}).get('options', [])
+                schema[prop_name]['options'] = [opt['name'] for opt in options]
+        return schema
 
     def create_page(self, data: dict) -> dict:
         return self._request("POST", "/pages", json=data)
