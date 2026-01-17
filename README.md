@@ -1,6 +1,7 @@
 # Gototion — Telegram → Notion task helper
 
-Breve guía para configurar y ejecutar el bot que transforma mensajes en tareas y las guarda en Notion. Incluye soporte por lenguaje natural usando Gemini (API) o un parser local (llama.cpp), y un fallback heurístico.
+Gototion es un **agente conversacional en Telegram** que permite crear y gestionar tareas en Notion **hablando siempre en lenguaje natural**.  
+El bot interpreta los mensajes de forma continua y los transforma en acciones sobre Notion, priorizando una interacción fluida y sin comandos estructurados.
 
 **Requisitos**
 - Python 3.11+ (se recomendó 3.12 en el entorno conda).
@@ -10,7 +11,6 @@ Breve guía para configurar y ejecutar el bot que transforma mensajes en tareas 
 - `main.py`: arranca el bot.
 - `bot/`: código del bot (handlers, client, parsers).
 - `notion/`: cliente y servicios para la integración con Notion.
-- `llm_test.py`: parser local basado en `llama-cpp-python` y spaCy.
 - `env.yaml`: archivo de entorno (conda) sugerido para reproducir dependencias.
 
 **Variables de entorno (archivo `.env`)**
@@ -35,7 +35,6 @@ conda activate gototion312
 ```
 
 
-Nota: `llama-cpp-python` requiere que tengas un runtime compatible (libllama/ggml/gguf). Si vas a usar un modelo local, coloca el archivo `.gguf` y ajusta `MODEL_PATH` en `llm_test.py`.
 
 **Run (modo desarrollo)**
 
